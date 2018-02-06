@@ -21,10 +21,11 @@ parser.add_argument("-v", '--verbose', action='store_true', help="be verbose")
 parser.add_argument("-c", '--calibrate', action='store_true', help="determine camera calibration")
 args = parser.parse_args()
 
+
 # The goals / steps of this project are the following:
 # 
 # X 1. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-# _ 2. Apply a distortion correction to raw images.
+# X 2. Apply a distortion correction to raw images.
 # _ 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 # _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 # _ 5. Detect lane pixels and fit to find the lane boundary.
@@ -34,6 +35,7 @@ args = parser.parse_args()
 # 
 
 class ImageUndistorter:
+# 2. Apply a distortion correction to raw images.
     def __init__(self):
         self.init = False
         self.mtx = None
@@ -148,6 +150,25 @@ def test_undistortion():
     ax2.set_title('Undistorted Image', fontsize=30) 
     plt.show()
 
+# 3. Use color transforms, gradients, etc., to create a thresholded binary image.
+def process_image(image_filename):
+    if args.verbose:
+        print(image_filename)
+    image = cv2.imread(image_filename)
+    image = image_undistorter.undistort(image)
+
+
+def process_images():
+    if args.verbose:
+        print("Processing images")
+
+    image_filenames = glob.glob('test_images/*.jpg')
+
+    for image_filename in image_filenames:
+        process_image(image_filename)
+  
+image_undistorter = ImageUndistorter()
+
 def main():
 
     if args.verbose:
@@ -157,6 +178,8 @@ def main():
         calibrate_camera()
 
     #test_undistortion()
+
+    process_images()
 
 if __name__ == "__main__":
     main()
