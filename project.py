@@ -136,14 +136,7 @@ def calibrate_camera():
     ax2.set_title('Undistorted Image', fontsize=30) 
     plt.show()
 
-def main():
-
-    if args.verbose:
-        print("being verbose")
-
-    if args.calibrate:
-        calibrate_camera()
-        
+def test_undistortion():
     img = cv2.imread('test_images/test1.jpg')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     image_undistorter = ImageUndistorter()
@@ -154,6 +147,16 @@ def main():
     ax2.imshow(dst)
     ax2.set_title('Undistorted Image', fontsize=30) 
     plt.show()
+
+def main():
+
+    if args.verbose:
+        print("being verbose")
+
+    if args.calibrate:
+        calibrate_camera()
+
+    #test_undistortion()
 
 if __name__ == "__main__":
     main()
