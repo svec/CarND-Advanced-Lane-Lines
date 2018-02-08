@@ -276,7 +276,8 @@ def plot_colors(rgb_image):
 
     if True:
         # test_images/test1.jpg: light gray road, yellow + white lines
-        #   HLS_S is the only one that works
+        #   HLS_S is the only one that works, but it misses some white lines
+        #   R gives good white line visibility
         thresh_min=100
         thresh_max=255
         g_subplotter.setup(cols=5,rows=3)
@@ -300,41 +301,107 @@ def plot_colors(rgb_image):
 
         g_subplotter.show()
 
+def abs_sobel_thresh(image, orient='x', sobel_kernel=3, thresh=(0, 255)):
+    dx = 1
+    dy = 0
+    if orient == 'y':
+        dx = 0
+        dy = 1
+    sobel_deriv = cv2.Sobel(image, cv2.CV_64F, dx, dy, ksize=sobel_kernel)
+    abs_sobel_deriv = np.absolute(sobel_deriv)
+    # 4) Scale to 8-bit (0 - 255) then convert to type = np.uint8
+    scaled_sobel = np.uint8(255*abs_sobel_deriv/np.max(abs_sobel_deriv))
+    # 5) Create a mask of 1's where the scaled gradient magnitude 
+            # is > thresh_min and < thresh_max
+    binary_output = np.zeros_like(scaled_sobel)
+    binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
+    return binary_output
+
+def mag_thresh(image, sobel_kernel=3, thresh=(0, 255)):
+    sobel_x = cv2.Sobel(image, cv2.CV_64F, dx=1, dy=0, ksize=sobel_kernel)
+    sobel_y = cv2.Sobel(image, cv2.CV_64F, dx=0, dy=1, ksize=sobel_kernel)
+    
+    # 3) Calculate the magnitude 
+    mag_sobel = np.sqrt(np.square(sobel_x) + np.square(sobel_y))
+    # 4) Scale to 8-bit (0 - 255) then convert to type = np.uint8
+    scaled_sobel = np.uint8(255*mag_sobel/np.max(mag_sobel))
+    print(np.max(scaled_sobel))
+    # 5) Create a mask of 1's where the scaled gradient magnitude 
+            # is > thresh_min and < thresh_max
+    binary_output = np.zeros_like(scaled_sobel)
+    binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
+    # 6) Return this mask as your binary_output image
+    return binary_output
+
+def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi/2)):
+    # 2) Take the gradient in x and y separately
+    sobel_x = cv2.Sobel(image, cv2.CV_64F, dx=1, dy=0, ksize=sobel_kernel)
+    sobel_y = cv2.Sobel(image, cv2.CV_64F, dx=0, dy=1, ksize=sobel_kernel)
+    
+    # 3) Take the absolute value of the x and y gradients
+    abs_sobelx = np.absolute(sobel_x)
+    abs_sobely = np.absolute(sobel_y)
+    # 4) Use np.arctan2(abs_sobely, abs_sobelx) to calculate the direction of the gradient 
+    dir = np.arctan2(abs_sobely, abs_sobelx)
+
+    # 5) Create a binary mask where direction thresholds are met
+    binary_output = np.zeros_like(dir)
+    binary_output[(dir >= thresh[0]) & (dir <= thresh[1])] = 1
+
+    # 6) Return this mask as your binary_output image
+    #binary_output = np.copy(img) # Remove this line
+    return binary_output
+
+
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def process_image(image_filename):
     if args.verbose:
         print(image_filename)
 
     image = mpimg.imread(image_filename) # reads in as RGB
-    undistorted_image = g_image_undistorter.undistort(image)
+    image = g_image_undistorter.undistort(image)
 
-    plot_colors(undistorted_image)
 
-    r_channel = undistorted_image[:,:,0]
-    g_channel = undistorted_image[:,:,1]
-    b_channel = undistorted_image[:,:,2]
+    #plot_colors(image)
+
+    #r_channel = image[:,:,0]
+    #g_channel = image[:,:,1]
+    #b_channel = image[:,:,2]
 
     # Convert to HLS color space and separate the S channel
-    hls = cv2.cvtColor(undistorted_image, cv2.COLOR_RGB2HLS)
-    h_channel = hls[:,:,0]
-    l_channel = hls[:,:,1]
+    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+    #h_channel = hls[:,:,0]
+    #l_channel = hls[:,:,1]
     s_channel = hls[:,:,2]
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
     # Explore gradients in other colors spaces / color channels to see what might work better
-    gray = cv2.cvtColor(undistorted_image, cv2.COLOR_RGB2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
-    # Sobel x
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0) # Take the derivative in x
-    abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
-    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
+    # Choose a Sobel kernel size
+    ksize = 3 # Choose a larger odd number to smooth gradient measurements
 
-    # Threshold x gradient
-    thresh_min = 20
-    thresh_max = 100
-    sxbinary = np.zeros_like(scaled_sobel)
-    sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
+    # Apply each of the thresholding functions
+    gradx = abs_sobel_thresh(gray, orient='x', sobel_kernel=ksize, thresh=(5,100))
+    grady = abs_sobel_thresh(gray, orient='y', sobel_kernel=ksize, thresh=(5, 100))
+    mag_binary = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
+    #dir_binary = dir_threshold(image, sobel_kernel=ksize, thresh=(0, np.pi/2))
+    dir_binary = dir_threshold(gray, sobel_kernel=ksize, thresh=(0.7, 1.3))
+
+    g_subplotter.setup(cols=2,rows=3)
+    g_subplotter.next(image, 'orig')
+    g_subplotter.next(gray, 'gray')
+    g_subplotter.next(gradx, 'grad-x')
+    g_subplotter.next(grady, 'grad-y')
+    g_subplotter.next(mag_binary, 'mag')
+    g_subplotter.next(dir_binary, 'dir')
+    g_subplotter.show()
+
+    #combined = np.zeros_like(dir_binary)
+    #combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
+
+    return
 
     # Threshold color channel
     s_thresh_min = 170
@@ -361,7 +428,7 @@ def process_image(image_filename):
 
     if False and args.verbose:
         g_subplotter.setup(cols=2,rows=2)
-        g_subplotter.next(undistorted_image, 'original')
+        g_subplotter.next(image, 'original')
         g_subplotter.next(sxbinary, 'sobel binary')
         g_subplotter.next(s_binary, 'S channel binary')
         g_subplotter.next(color_binary, 'color binary')
@@ -383,7 +450,7 @@ def process_images(num):
             break
         process_image(image_filename)
         count = count + 1
-  
+
 g_image_undistorter = ImageUndistorter()
 
 def main():
