@@ -364,7 +364,7 @@ def process_image(image_filename):
 
     #plot_colors(image)
 
-    #r_channel = image[:,:,0]
+    r_channel = image[:,:,0]
     #g_channel = image[:,:,1]
     #b_channel = image[:,:,2]
 
@@ -383,23 +383,33 @@ def process_image(image_filename):
     ksize = 3 # Choose a larger odd number to smooth gradient measurements
 
     # Apply each of the thresholding functions
-    gradx = abs_sobel_thresh(gray, orient='x', sobel_kernel=ksize, thresh=(5,100))
-    grady = abs_sobel_thresh(gray, orient='y', sobel_kernel=ksize, thresh=(5, 100))
-    mag_binary = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
-    #dir_binary = dir_threshold(image, sobel_kernel=ksize, thresh=(0, np.pi/2))
-    dir_binary = dir_threshold(gray, sobel_kernel=ksize, thresh=(0.7, 1.3))
+    #gradx = abs_sobel_thresh(gray, orient='x', sobel_kernel=ksize, thresh=(5,100))
+    #grady = abs_sobel_thresh(gray, orient='y', sobel_kernel=ksize, thresh=(5, 100))
+    #mag = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
+    #dir_binary = dir_threshold(gray, sobel_kernel=ksize, thresh=(0.7, 1.3)) # 0,np.pi/2 = full range
 
-    g_subplotter.setup(cols=2,rows=3)
+    #g_subplotter.setup(cols=2,rows=3)
+    #g_subplotter.next(image, 'orig')
+    #g_subplotter.next(gray, 'gray')
+    #g_subplotter.next(gradx, 'grad-x')
+    #g_subplotter.next(grady, 'grad-y')
+    #g_subplotter.next(mag, 'mag')
+    #g_subplotter.next(dir_binary, 'dir')
+    #g_subplotter.show()
+
+    mag_grey = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
+    mag_s = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
+    mag_r = mag_thresh(r_channel, sobel_kernel=ksize, thresh=(30, 100))
+
+    g_subplotter.setup(cols=2,rows=2)
     g_subplotter.next(image, 'orig')
-    g_subplotter.next(gray, 'gray')
-    g_subplotter.next(gradx, 'grad-x')
-    g_subplotter.next(grady, 'grad-y')
-    g_subplotter.next(mag_binary, 'mag')
-    g_subplotter.next(dir_binary, 'dir')
+    g_subplotter.next(mag_grey, 'mag-gray')
+    g_subplotter.next(mag_s, 'mag-s') # winner!
+    g_subplotter.next(mag_r, 'mag-r')
     g_subplotter.show()
 
     #combined = np.zeros_like(dir_binary)
-    #combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
+    #combined[((gradx == 1) & (grady == 1)) | ((mag == 1) & (dir_binary == 1))] = 1
 
     return
 
