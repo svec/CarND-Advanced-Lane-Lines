@@ -356,19 +356,96 @@ def color_threshold(image, thresh=(0,255)):
     s_binary[(image >= thresh[0]) & (image <= thresh[1])] = 1
     return s_binary
 
-# 3. Use color transforms, gradients, etc., to create a thresholded binary image.
-def process_image(image_filename):
-    binary_image = create_binary_image(image_filename)
+# _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
+def create_top_down_image(orig_image, binary_image):
+    # Choose offset from image corners to plot detected corners
+    # This should be chosen to present the result at the proper aspect ratio
+    # My choice of 100 pixels is not exact, but close enough for our purpose here
+    offset = 100 # offset for dst points
+    # Grab the image shape
+    img_size = (binary_image.shape[1], binary_image.shape[0])
 
-def create_binary_image(image_filename):
+    # Source images are 1280 wide by 720 high.
+
+    src_top_right_x = 700 - 10
+    src_top_y = 448
+    src_bottom_right_x = 1130 + 50
+    src_bottom_y = 719
+    src_bottom_left_x = 180 - 50
+    src_top_left_x = 580 + 10
+
+    # For source points I'm choosing a trapezoid around straight lane lines
+    # in the center of the camera.
+    src = np.float32([ 
+                      [src_top_right_x,    src_top_y],# upper right
+                      [src_bottom_right_x, src_bottom_y],# lower right
+                      [src_bottom_left_x,  src_bottom_y],# lower left
+                      [src_top_left_x,     src_top_y],# upper left
+                      ])
+    if 1:
+        lines_on_orig_image = np.copy(orig_image)
+        cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[2]), tuple(src[3]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[3]), tuple(src[0]), color=[255,0,0], thickness=1)
+        g_subplotter.setup(cols=2,rows=2)
+        g_subplotter.next(lines_on_orig_image, 'orig')
+        #g_subplotter.show()
+
+    # For destination points, I'm arbitrarily choosing some points to be
+    # a nice fit for displaying our warped result 
+    # again, not exact, but close enough for our purposes
+    dst_left_x = 300
+    dst_right_x = 900
+    dst_top_y = 0
+    dst_bottom_y = 719
+    dst = np.float32([
+                      [dst_right_x, dst_top_y],# upper right
+                      [dst_right_x, dst_bottom_y],# lower right
+                      [dst_left_x,  dst_bottom_y],# lower left
+                      [dst_left_x,  dst_top_y],# upper left
+                      ])
+    # Given src and dst points, calculate the perspective transform matrix
+    M = cv2.getPerspectiveTransform(src, dst)
+    # Warp the image using OpenCV warpPerspective()
+    top_down = cv2.warpPerspective(binary_image, M, img_size)
+
+    top_down_color = cv2.warpPerspective(orig_image, M, img_size)
+
+    if 1:
+        lines_on_transformed_image = np.copy(top_down_color)
+        cv2.line(lines_on_transformed_image, tuple(dst[0]), tuple(dst[1]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_transformed_image, tuple(dst[1]), tuple(dst[2]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_transformed_image, tuple(dst[2]), tuple(dst[3]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_transformed_image, tuple(dst[3]), tuple(dst[0]), color=[255,0,0], thickness=1)
+
+        # Line up the green line with the outer lane line edges to verify they're straight.
+        delta_right_x = -40
+        delta_left_x = 40
+        cv2.line(lines_on_transformed_image,
+                 (dst_right_x+delta_right_x, dst_top_y), (dst_right_x+delta_right_x, dst_bottom_y),
+                 color=[0, 255,0], thickness=1)
+        cv2.line(lines_on_transformed_image,
+                 (dst_left_x+delta_left_x, dst_top_y), (dst_left_x+delta_left_x, dst_bottom_y),
+                 color=[0, 255,0], thickness=1)
+        g_subplotter.next(lines_on_transformed_image, 'trans')
+        g_subplotter.next(binary_image, 'orig_binary')
+        g_subplotter.next(top_down, 'top_down_binary')
+        g_subplotter.show()
+
+def process_image(image_filename):
     if args.verbose:
         print(image_filename)
 
     image = mpimg.imread(image_filename) # reads in as RGB
     image = g_image_undistorter.undistort(image)
 
-    #plot_colors(image)
+    binary_image = create_binary_image(image)
 
+    top_down_image = create_top_down_image(image, binary_image)
+
+# 3. Use color transforms, gradients, etc., to create a thresholded binary image.
+def create_binary_image(image):
     r_channel = image[:,:,0]
     #g_channel = image[:,:,1]
     #b_channel = image[:,:,2]
