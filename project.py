@@ -26,7 +26,7 @@ args = parser.parse_args()
 # 
 # X 1. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
 # X 2. Apply a distortion correction to raw images.
-# _ 3. Use color transforms, gradients, etc., to create a thresholded binary image.
+# X 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 # _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 # _ 5. Detect lane pixels and fit to find the lane boundary.
 # _ 6. Determine the curvature of the lane and vehicle position with respect to center.
@@ -325,7 +325,6 @@ def mag_thresh(image, sobel_kernel=3, thresh=(0, 255)):
     mag_sobel = np.sqrt(np.square(sobel_x) + np.square(sobel_y))
     # 4) Scale to 8-bit (0 - 255) then convert to type = np.uint8
     scaled_sobel = np.uint8(255*mag_sobel/np.max(mag_sobel))
-    print(np.max(scaled_sobel))
     # 5) Create a mask of 1's where the scaled gradient magnitude 
             # is > thresh_min and < thresh_max
     binary_output = np.zeros_like(scaled_sobel)
@@ -352,15 +351,21 @@ def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi/2)):
     #binary_output = np.copy(img) # Remove this line
     return binary_output
 
+def color_threshold(image, thresh=(0,255)):
+    s_binary = np.zeros_like(image)
+    s_binary[(image >= thresh[0]) & (image <= thresh[1])] = 1
+    return s_binary
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def process_image(image_filename):
+    binary_image = create_binary_image(image_filename)
+
+def create_binary_image(image_filename):
     if args.verbose:
         print(image_filename)
 
     image = mpimg.imread(image_filename) # reads in as RGB
     image = g_image_undistorter.undistort(image)
-
 
     #plot_colors(image)
 
@@ -397,56 +402,111 @@ def process_image(image_filename):
     #g_subplotter.next(dir_binary, 'dir')
     #g_subplotter.show()
 
-    mag_grey = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
-    mag_s = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
-    mag_r = mag_thresh(r_channel, sobel_kernel=ksize, thresh=(30, 100))
+    if 0: # gradx,y
+        grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(5,100))
+        grad2 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
+        grad3 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(30,100))
+        grad4 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(50,100))
+        grad5 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(75,100))
 
-    g_subplotter.setup(cols=2,rows=2)
-    g_subplotter.next(image, 'orig')
-    g_subplotter.next(mag_grey, 'mag-gray')
-    g_subplotter.next(mag_s, 'mag-s') # winner!
-    g_subplotter.next(mag_r, 'mag-r')
-    g_subplotter.show()
+        #grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(5,100))
+        #grad2 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(10,100))
+        #grad3 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(15,100))
+        #grad4 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(20,100))
+        #grad5 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
 
-    #combined = np.zeros_like(dir_binary)
-    #combined[((gradx == 1) & (grady == 1)) | ((mag == 1) & (dir_binary == 1))] = 1
+        # 'x' is better than 'y'
+        #grad1 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(5,100))
+        #grad2 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(25,100))
+        #grad3 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(30,100))
+        #grad4 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(50,100))
+        #grad4 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(75,100))
 
-    return
-
-    # Threshold color channel
-    s_thresh_min = 170
-    s_thresh_max = 255
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
-
-    # Stack each channel to view their individual contributions in green and blue respectively
-    # This returns a stack of the two binary images, whose components you can see as different colors
-    color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
-
-    # Combine the two binary thresholds
-    combined_binary = np.zeros_like(sxbinary)
-    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
-
-    # Plotting thresholded images
-    #f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
-    #ax1.set_title('Stacked thresholds')
-    #ax1.imshow(color_binary)
-
-    #ax2.set_title('Combined S channel and gradient thresholds')
-    #ax2.imshow(combined_binary, cmap='gray')
-    #plt.show()
-
-    if False and args.verbose:
-        g_subplotter.setup(cols=2,rows=2)
-        g_subplotter.next(image, 'original')
-        g_subplotter.next(sxbinary, 'sobel binary')
-        g_subplotter.next(s_binary, 'S channel binary')
-        g_subplotter.next(color_binary, 'color binary')
-        #g_subplotter.next(color_binary)
-        #g_subplotter.next(combined_binary)
+        g_subplotter.setup(cols=2,rows=3)
+        g_subplotter.next(image, 'orig')
+        #g_subplotter.next(s_channel, 'HLS_X')
+        g_subplotter.next(grad1, 'gradx1')
+        g_subplotter.next(grad2, 'grad2')
+        g_subplotter.next(grad3, 'grad3')
+        g_subplotter.next(grad4, 'grad4')
+        g_subplotter.next(grad4, 'grad5')
         g_subplotter.show()
-    
 
+    if 0: # direction
+        dir_s1 = dir_threshold(s_channel, sobel_kernel=ksize, thresh=(-0.000001, -1.0))
+        dir_s2 = dir_threshold(s_channel, sobel_kernel=ksize, thresh=(-0.05, 0.05))
+        dir_s3 = dir_threshold(s_channel, sobel_kernel=ksize, thresh=(-0.1, 0.1))
+
+        g_subplotter.setup(cols=2,rows=2)
+        g_subplotter.next(image, 'orig')
+        #g_subplotter.next(s_channel, 'HLS_X')
+        g_subplotter.next(dir_s1, 'dir_s1')
+        g_subplotter.next(dir_s2, 'dir_s2')
+        g_subplotter.next(dir_s3, 'dir_s3')
+        g_subplotter.show()
+
+    if 0: # mag
+        #mag_grey = mag_thresh(gray, sobel_kernel=ksize, thresh=(30, 100))
+        #mag_s = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100)) # winner
+        #mag_r = mag_thresh(r_channel, sobel_kernel=ksize, thresh=(30, 100))
+
+        #mag_s1 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100)) # winner
+        #mag_s2 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(50, 100))
+        #mag_s3 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(75, 100))
+        #mag_s4 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(90, 100))
+
+        mag_s1 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100)) # winner not much diff
+        mag_s2 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 125))
+        mag_s3 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 150))
+        mag_s4 = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 175))
+
+        g_subplotter.setup(cols=2,rows=3)
+        g_subplotter.next(image, 'orig')
+        g_subplotter.next(s_channel, 's_channel')
+        g_subplotter.next(mag_s1, 'mag-s1')
+        g_subplotter.next(mag_s2, 'mag-s2')
+        g_subplotter.next(mag_s3, 'mag-s3')
+        g_subplotter.next(mag_s4, 'mag-s4')
+        g_subplotter.show()
+
+    if 0: # color thresh
+        #s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
+        #s_channel_thresh2 = color_threshold(s_channel, thresh=(200,255))
+        #s_channel_thresh3 = color_threshold(s_channel, thresh=(215,255))
+        #s_channel_thresh4 = color_threshold(s_channel, thresh=(230,255))
+
+        s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
+        s_channel_thresh2 = color_threshold(s_channel, thresh=(150,255))
+        s_channel_thresh3 = color_threshold(s_channel, thresh=(125,255))
+        s_channel_thresh4 = color_threshold(s_channel, thresh=(100,255)) # good in the shady spots
+
+        g_subplotter.setup(cols=2,rows=3)
+        g_subplotter.next(image, 'orig')
+        g_subplotter.next(s_channel, 's_channel')
+        g_subplotter.next(s_channel_thresh1, 's_1')
+        g_subplotter.next(s_channel_thresh2, 's_2')
+        g_subplotter.next(s_channel_thresh3, 's_3')
+        g_subplotter.next(s_channel_thresh4, 's_4')
+        g_subplotter.show()
+
+    s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255))
+    gradx = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
+    mag = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
+
+    combined_binary = np.zeros_like(mag)
+    combined_binary[(s_channel_thresh1 == 1) | (gradx == 1)] = 1
+
+    if 0:
+        g_subplotter.setup(cols=2,rows=3)
+        g_subplotter.next(image, 'orig')
+        g_subplotter.next(s_channel, 's_channel')
+        g_subplotter.next(s_channel_thresh1, 's_thresh')
+        g_subplotter.next(gradx, 'gradx')
+        g_subplotter.next(mag, 'mag')
+        g_subplotter.next(combined_binary, 's_thresh|gradx')
+        g_subplotter.show()
+
+    return combined_binary
 
 def process_images(num):
     if args.verbose:
