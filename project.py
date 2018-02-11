@@ -49,7 +49,7 @@ class Subplotter:
         f, ax = plt.subplots(self.rows, self.cols, figsize=(14, 8))
         f.tight_layout()
 
-    def next(self, image, title=None):
+    def next(self, image, title=None, just_plot=False):
         if self.current == 0:
             print("ERROR: subplot next called before setup")
             sys.exit(1)
@@ -59,7 +59,12 @@ class Subplotter:
             sys.exit(1)
 
         plt.subplot(self.rows, self.cols, self.current)
-        plt.imshow(image.squeeze(), cmap='gray')
+
+        if just_plot:
+            plt.plot(image)
+        else:
+            plt.imshow(image.squeeze(), cmap='gray')
+
         if title:
             plt.title(title)
         self.current = self.current + 1
@@ -382,7 +387,7 @@ def create_top_down_image(orig_image, binary_image):
                       [src_bottom_left_x,  src_bottom_y],# lower left
                       [src_top_left_x,     src_top_y],# upper left
                       ])
-    if 1:
+    if 0:
         lines_on_orig_image = np.copy(orig_image)
         cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
         cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
@@ -412,7 +417,7 @@ def create_top_down_image(orig_image, binary_image):
 
     top_down_color = cv2.warpPerspective(orig_image, M, img_size)
 
-    if 1:
+    if 0:
         lines_on_transformed_image = np.copy(top_down_color)
         cv2.line(lines_on_transformed_image, tuple(dst[0]), tuple(dst[1]), color=[255,0,0], thickness=1)
         cv2.line(lines_on_transformed_image, tuple(dst[1]), tuple(dst[2]), color=[255,0,0], thickness=1)
@@ -433,6 +438,110 @@ def create_top_down_image(orig_image, binary_image):
         g_subplotter.next(top_down, 'top_down_binary')
         g_subplotter.show()
 
+    return top_down
+
+def find_lane_lines(orig_image, top_down_binary_image):
+    img_height = top_down_binary_image.shape[0]
+    img_width = top_down_binary_image.shape[1]
+    # Assuming you have created a warped binary image called "top_down_binary_image"
+    # Take a histogram of the bottom half of the image
+    histogram = np.sum(top_down_binary_image[img_height//2:,:], axis=0)
+    # Create an output image to draw on and  visualize the result
+    out_img = np.dstack((top_down_binary_image, top_down_binary_image, top_down_binary_image))*255
+    # Find the peak of the left and right halves of the histogram
+    # These will be the starting point for the left and right lines
+    midpoint = np.int(histogram.shape[0]//2)
+    leftx_base = np.argmax(histogram[:midpoint])
+    rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+
+    if 1:
+        g_subplotter.setup(cols=1,rows=2)
+        g_subplotter.next(top_down_binary_image, 'bin')
+        g_subplotter.next(histogram, 'hist', just_plot=True)
+        g_subplotter.show()
+
+    # Choose the number of sliding windows
+    nwindows = 9
+    # Set height of windows
+    window_height = np.int(img_height/nwindows)
+    # Identify the x and y positions of all nonzero pixels in the image
+    nonzero = top_down_binary_image.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    # Current positions to be updated for each window
+    leftx_current = leftx_base
+    rightx_current = rightx_base
+    # Set the width of the windows +/- margin
+    margin = 100
+    # Set minimum number of pixels found to recenter window
+    minpix = 50
+    # Create empty lists to receive left and right lane pixel indices
+    left_lane_inds = []
+    right_lane_inds = []
+
+    # Step through the windows one by one
+    for window in range(nwindows):
+        # Identify window boundaries in x and y (and right and left)
+        win_y_low = img_height - (window+1)*window_height
+        win_y_high = img_height - window*window_height
+        win_xleft_low = leftx_current - margin
+        win_xleft_high = leftx_current + margin
+        win_xright_low = rightx_current - margin
+        win_xright_high = rightx_current + margin
+        # Draw the windows on the visualization image
+        cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),
+        (0,255,0), 2) 
+        cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),
+        (0,255,0), 2) 
+        # Identify the nonzero pixels in x and y within the window
+        good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+        (nonzerox >= win_xleft_low) &  (nonzerox < win_xleft_high)).nonzero()[0]
+        good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+        (nonzerox >= win_xright_low) &  (nonzerox < win_xright_high)).nonzero()[0]
+        # Append these indices to the lists
+        left_lane_inds.append(good_left_inds)
+        right_lane_inds.append(good_right_inds)
+        # If you found > minpix pixels, recenter next window on their mean position
+        if len(good_left_inds) > minpix:
+            leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+        if len(good_right_inds) > minpix:        
+            rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
+    # Concatenate the arrays of indices
+    left_lane_inds = np.concatenate(left_lane_inds)
+    right_lane_inds = np.concatenate(right_lane_inds)
+
+    # Extract left and right line pixel positions
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds] 
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds] 
+    
+    # Fit a second order polynomial to each
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, img_height-1, img_height )
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+    if 0:
+        g_subplotter.setup(cols=2,rows=2)
+        g_subplotter.next(orig_image, 'orig')
+        g_subplotter.next(top_down_binary_image, 'top_down')
+
+        out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
+        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+        #plt.imshow(out_img)
+        g_subplotter.next(out_img, 'out')
+        plt.plot(left_fitx, ploty, color='yellow')
+        plt.plot(right_fitx, ploty, color='yellow')
+        plt.xlim(0, 1280)
+        plt.ylim(720, 0)
+        #plt.show()
+        g_subplotter.show()
+
 def process_image(image_filename):
     if args.verbose:
         print(image_filename)
@@ -442,7 +551,9 @@ def process_image(image_filename):
 
     binary_image = create_binary_image(image)
 
-    top_down_image = create_top_down_image(image, binary_image)
+    top_down_binary_image = create_top_down_image(image, binary_image)
+
+    find_lane_lines(image, top_down_binary_image)
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def create_binary_image(image):
