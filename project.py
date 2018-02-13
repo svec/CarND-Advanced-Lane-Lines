@@ -356,6 +356,30 @@ def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi/2)):
     #binary_output = np.copy(img) # Remove this line
     return binary_output
 
+def region_of_interest(img, vertices):
+    """
+    Applies an image mask.
+    
+    Only keeps the region of the image defined by the polygon
+    formed from `vertices`. The rest of the image is set to black.
+    """
+    #defining a blank mask to start with
+    mask = np.zeros_like(img)   
+    
+    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+        
+    #filling pixels inside the polygon defined by "vertices" with the fill color    
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
+    
+    #returning the image only where mask pixels are nonzero
+    masked_image = cv2.bitwise_and(img, mask)
+    return masked_image
+
 def color_threshold(image, thresh=(0,255)):
     s_binary = np.zeros_like(image)
     s_binary[(image >= thresh[0]) & (image <= thresh[1])] = 1
@@ -363,14 +387,25 @@ def color_threshold(image, thresh=(0,255)):
 
 # _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 def create_top_down_image(orig_image, binary_image):
-    # Choose offset from image corners to plot detected corners
-    # This should be chosen to present the result at the proper aspect ratio
-    # My choice of 100 pixels is not exact, but close enough for our purpose here
-    offset = 100 # offset for dst points
-    # Grab the image shape
-    img_size = (binary_image.shape[1], binary_image.shape[0])
-
     # Source images are 1280 wide by 720 high.
+    # Grab the image shape
+    img_height = binary_image.shape[0]
+    img_width  = binary_image.shape[1]
+    img_size = (img_width, img_height)
+
+    top_of_mask = 450
+    mask_lower_left  = ( 120, img_height-1)
+    mask_upper_left  = ( 575, top_of_mask)
+    mask_upper_right = ( 725, top_of_mask)
+    mask_lower_right = (1200, img_height-1)
+
+    # Keep only the part of the image likely to have lanes on it: right in front of the car.
+    # (Keeps only the middle/bottom part of the image.)
+    bounding_shape = np.array([[mask_lower_left, mask_upper_left, mask_upper_right, mask_lower_right]], dtype=np.int32)
+    binary_image_copy = np.copy(binary_image)
+    masked_binary_image = region_of_interest(binary_image, bounding_shape)
+
+
 
     src_top_right_x = 700 - 10
     src_top_y = 448
@@ -389,13 +424,19 @@ def create_top_down_image(orig_image, binary_image):
                       ])
     if 0:
         lines_on_orig_image = np.copy(orig_image)
-        cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
-        cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
-        cv2.line(lines_on_orig_image, tuple(src[2]), tuple(src[3]), color=[255,0,0], thickness=1)
-        cv2.line(lines_on_orig_image, tuple(src[3]), tuple(src[0]), color=[255,0,0], thickness=1)
+        #cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
+        #cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
+        #cv2.line(lines_on_orig_image, tuple(src[2]), tuple(src[3]), color=[255,0,0], thickness=1)
+        #cv2.line(lines_on_orig_image, tuple(src[3]), tuple(src[0]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, mask_lower_left, mask_upper_left, color=[255,0,0], thickness=3)
+        cv2.line(lines_on_orig_image, mask_upper_left, mask_upper_right, color=[255,0,0], thickness=3)
+        cv2.line(lines_on_orig_image, mask_upper_right, mask_lower_right, color=[255,0,0], thickness=3)
+        cv2.line(lines_on_orig_image, mask_lower_right, mask_lower_left, color=[255,0,0], thickness=3)
         g_subplotter.setup(cols=2,rows=2)
         g_subplotter.next(lines_on_orig_image, 'orig')
-        #g_subplotter.show()
+        g_subplotter.next(binary_image_copy, 'binary orig')
+        g_subplotter.next(masked_binary_image, 'masked binary')
+        g_subplotter.show()
 
     # For destination points, I'm arbitrarily choosing some points to be
     # a nice fit for displaying our warped result 
@@ -413,7 +454,7 @@ def create_top_down_image(orig_image, binary_image):
     # Given src and dst points, calculate the perspective transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
     # Warp the image using OpenCV warpPerspective()
-    top_down = cv2.warpPerspective(binary_image, M, img_size)
+    top_down = cv2.warpPerspective(masked_binary_image, M, img_size)
 
     top_down_color = cv2.warpPerspective(orig_image, M, img_size)
 
@@ -440,7 +481,7 @@ def create_top_down_image(orig_image, binary_image):
 
     return top_down
 
-def find_lane_lines(orig_image, top_down_binary_image):
+def find_lane_lines_basic(orig_image, top_down_binary_image):
     img_height = top_down_binary_image.shape[0]
     img_width = top_down_binary_image.shape[1]
     # Assuming you have created a warped binary image called "top_down_binary_image"
@@ -574,6 +615,91 @@ def find_lane_lines(orig_image, top_down_binary_image):
     if 1:
         g_subplotter.show()
 
+def window_mask(width, height, img_ref, center,level):
+    output = np.zeros_like(img_ref)
+    output[int(img_ref.shape[0]-(level+1)*height):int(img_ref.shape[0]-level*height),max(0,int(center-width/2)):min(int(center+width/2),img_ref.shape[1])] = 1
+    return output
+
+def find_window_centroids(image, window_width, window_height, margin):
+    
+    window_centroids = [] # Store the (left,right) window centroid positions per level
+    window = np.ones(window_width) # Create our window template that we will use for convolutions
+    
+    # First find the two starting positions for the left and right lane by using np.sum to get the vertical image slice
+    # and then np.convolve the vertical image slice with the window template 
+    
+    # Sum quarter bottom of image to get slice, could use a different ratio
+    l_sum = np.sum(image[int(3*image.shape[0]/4):,:int(image.shape[1]/2)], axis=0)
+    l_center = np.argmax(np.convolve(window,l_sum))-window_width/2
+    r_sum = np.sum(image[int(3*image.shape[0]/4):,int(image.shape[1]/2):], axis=0)
+    r_center = np.argmax(np.convolve(window,r_sum))-window_width/2+int(image.shape[1]/2)
+    
+    # Add what we found for the first layer
+    window_centroids.append((l_center,r_center))
+    
+    # Go through each layer looking for max pixel locations
+    for level in range(1,(int)(image.shape[0]/window_height)):
+            # convolve the window into the vertical slice of the image
+            image_layer = np.sum(image[int(image.shape[0]-(level+1)*window_height):int(image.shape[0]-level*window_height),:], axis=0)
+            conv_signal = np.convolve(window, image_layer)
+            # Find the best left centroid by using past left center as a reference
+            # Use window_width/2 as offset because convolution signal reference is at right side of window, not center of window
+            offset = window_width/2
+            l_min_index = int(max(l_center+offset-margin,0))
+            l_max_index = int(min(l_center+offset+margin,image.shape[1]))
+            l_center = np.argmax(conv_signal[l_min_index:l_max_index])+l_min_index-offset
+            # Find the best right centroid by using past right center as a reference
+            r_min_index = int(max(r_center+offset-margin,0))
+            r_max_index = int(min(r_center+offset+margin,image.shape[1]))
+            r_center = np.argmax(conv_signal[r_min_index:r_max_index])+r_min_index-offset
+            # Add what we found for that layer
+            window_centroids.append((l_center,r_center))
+
+    return window_centroids
+
+def find_lane_lines_sliding_window(orig_image, top_down_binary_image):
+    # Read in a thresholded image
+    warped = top_down_binary_image
+    # window settings
+    window_width = 50 
+    window_height = 80 # Break image into 9 vertical layers since image height is 720
+    margin = 100 # How much to slide left and right for searching
+
+    window_centroids = find_window_centroids(warped, window_width, window_height, margin)
+
+# If we found any window centers
+    if len(window_centroids) > 0:
+
+        # Points used to draw all the left and right windows
+        l_points = np.zeros_like(warped)
+        r_points = np.zeros_like(warped)
+
+        # Go through each level and draw the windows 	
+        for level in range(0,len(window_centroids)):
+            # Window_mask is a function to draw window areas
+                l_mask = window_mask(window_width,window_height,warped,window_centroids[level][0],level)
+                r_mask = window_mask(window_width,window_height,warped,window_centroids[level][1],level)
+                # Add graphic points from window mask here to total pixels found 
+                l_points[(l_points == 255) | ((l_mask == 1) ) ] = 255
+                r_points[(r_points == 255) | ((r_mask == 1) ) ] = 255
+
+        # Draw the results
+        template = np.array(r_points+l_points,np.uint8) # add both left and right window pixels together
+        zero_channel = np.zeros_like(template) # create a zero color channel
+        template = np.array(cv2.merge((zero_channel,template,zero_channel)),np.uint8) # make window pixels green
+        warpage= np.dstack((warped, warped, warped))*255 # making the original road pixels 3 color channels
+        output = cv2.addWeighted(warpage, 1, template, 0.5, 0.0) # overlay the orignal road image with window results
+     
+# If no window centers found, just display orginal road image
+    else:
+        output = np.array(cv2.merge((warped,warped,warped)),np.uint8)
+
+# Display the final results
+    plt.imshow(output)
+    plt.title('window fitting results')
+    plt.show()
+    
+
 def process_image(image_filename):
     if args.verbose:
         print(image_filename)
@@ -585,7 +711,8 @@ def process_image(image_filename):
 
     top_down_binary_image = create_top_down_image(image, binary_image)
 
-    find_lane_lines(image, top_down_binary_image)
+    find_lane_lines_basic(image, top_down_binary_image)
+    #find_lane_lines_sliding_window(image, top_down_binary_image)
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def create_binary_image(image):
