@@ -27,8 +27,8 @@ args = parser.parse_args()
 # X 1. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
 # X 2. Apply a distortion correction to raw images.
 # X 3. Use color transforms, gradients, etc., to create a thresholded binary image.
-# _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
-# _ 5. Detect lane pixels and fit to find the lane boundary.
+# X 4. Apply a perspective transform to rectify binary image ("birds-eye view").
+# X 5. Detect lane pixels and fit to find the lane boundary.
 # _ 6. Determine the curvature of the lane and vehicle position with respect to center.
 # _ 7. Warp the detected lane boundaries back onto the original image.
 # _ 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
@@ -385,7 +385,7 @@ def color_threshold(image, thresh=(0,255)):
     s_binary[(image >= thresh[0]) & (image <= thresh[1])] = 1
     return s_binary
 
-# _ 4. Apply a perspective transform to rectify binary image ("birds-eye view").
+# 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 def create_top_down_image(orig_image, binary_image):
     # Source images are 1280 wide by 720 high.
     # Grab the image shape
@@ -453,6 +453,7 @@ def create_top_down_image(orig_image, binary_image):
                       ])
     # Given src and dst points, calculate the perspective transform matrix
     M = cv2.getPerspectiveTransform(src, dst)
+    Minv = cv2.getPerspectiveTransform(dst, src)
     # Warp the image using OpenCV warpPerspective()
     top_down = cv2.warpPerspective(masked_binary_image, M, img_size)
 
@@ -479,9 +480,10 @@ def create_top_down_image(orig_image, binary_image):
         g_subplotter.next(top_down, 'top_down_binary')
         g_subplotter.show()
 
-    return top_down
+    return top_down, Minv
 
-def find_lane_lines_basic(orig_image, top_down_binary_image):
+# 5. Detect lane pixels and fit to find the lane boundary.
+def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     img_height = top_down_binary_image.shape[0]
     img_width = top_down_binary_image.shape[1]
     # Assuming you have created a warped binary image called "top_down_binary_image"
@@ -612,8 +614,55 @@ def find_lane_lines_basic(orig_image, top_down_binary_image):
         plt.xlim(0, 1280)
         plt.ylim(720, 0)
 
+    # _ 6. Determine the curvature of the lane and vehicle position with respect to center.
+
+    # Define y-value where we want radius of curvature
+    # I'll choose the maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(ploty)
+    left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+    right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+    #print(left_curverad, right_curverad)
+    # Example values: 1926.74 1908.48
+    
+
+    # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+    # Fit new polynomials to x,y in world space
+    left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+    # Calculate the new radii of curvature
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+    # Now our radius of curvature is in meters
+    print(left_curverad, 'm', right_curverad, 'm')
+    plt.title(str(left_curverad) + "m " + str(right_curverad) + "m")
+    # Example values: 632.1 m    626.2 m
+
+    # Create an image to draw the lines on
+    warp_zero = np.zeros_like(top_down_binary_image).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    newwarp = cv2.warpPerspective(color_warp, Minv, (orig_image.shape[1], orig_image.shape[0])) 
+    # Combine the result with the original image
+    result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
+    #plt.imshow(result)
+    #plt.show()
     if 1:
+        plt.subplot(2,2,1)
+        plt.imshow(result)
         g_subplotter.show()
+
 
 def window_mask(width, height, img_ref, center,level):
     output = np.zeros_like(img_ref)
@@ -699,7 +748,6 @@ def find_lane_lines_sliding_window(orig_image, top_down_binary_image):
     plt.title('window fitting results')
     plt.show()
     
-
 def process_image(image_filename):
     if args.verbose:
         print(image_filename)
@@ -709,9 +757,9 @@ def process_image(image_filename):
 
     binary_image = create_binary_image(image)
 
-    top_down_binary_image = create_top_down_image(image, binary_image)
+    top_down_binary_image, Minv = create_top_down_image(image, binary_image)
 
-    find_lane_lines_basic(image, top_down_binary_image)
+    find_lane_lines_basic(image, top_down_binary_image, Minv)
     #find_lane_lines_sliding_window(image, top_down_binary_image)
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
