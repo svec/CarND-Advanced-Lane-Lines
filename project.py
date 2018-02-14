@@ -26,6 +26,7 @@ parser.add_argument("-m", '--video', action='store_true', help="process video in
 args = parser.parse_args()
 
 g_debug_internal = False
+g_error_frames = 0
 
 # The goals / steps of this project are the following:
 # 
@@ -490,6 +491,7 @@ def create_top_down_image(orig_image, binary_image):
 # 5. Detect lane pixels and fit to find the lane boundary.
 def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     global g_debug_internal
+    global g_error_frames
     img_height = top_down_binary_image.shape[0]
     img_width = top_down_binary_image.shape[1]
     # Assuming you have created a warped binary image called "top_down_binary_image"
@@ -575,15 +577,24 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds] 
     
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, img_height-1, img_height )
+    left_fit = (0,1,0)
+    right_fit = (0,1,0)
+
     # Fit a second order polynomial to each
     if len(leftx) > 0:
         left_fit = np.polyfit(lefty, leftx, 2)
+    else:
+        print("ERROR: Could not find left lane points")
+        g_error_frames = g_error_frames + 1
 
     if len(rightx) > 0:
         right_fit = np.polyfit(righty, rightx, 2)
+    else:
+        print("ERROR: Could not find right lane points")
+        g_error_frames = g_error_frames + 1
 
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, img_height-1, img_height )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
@@ -644,6 +655,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     xm_per_pix = 3.7/700 # meters per pixel in x dimension
 
     # Fit new polynomials to x,y in world space
+    left_fit_cr = (0,1,0)
+    right_fit_cr = (0,1,0)
     if len(leftx) > 0:
         left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
     if len(rightx) > 0:
@@ -696,6 +709,11 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
     cv2.putText(result, text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
+
+    if g_error_frames > 0:
+        text = "Error frames: {}".format(g_error_frames)
+        cv2.putText(result, text, (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
+
     if g_debug_internal: 
         plt.subplot(2,2,1)
         plt.imshow(result)
@@ -979,7 +997,7 @@ def process_video(filename):
     # ffmpeg -ss 00:00:19 -t 00:00:05 -i project_video.mp4 -r 1.0 testout%4d.jpg
     clip = VideoFileClip(filename)
     #NOTE: fl_image() expects color images!!
-    processed_clip = clip.fl_image(process_image).subclip(19,30) # seconds
+    processed_clip = clip.fl_image(process_image)#.subclip(19,30) # seconds
     processed_clip.write_videofile(output, audio=False)
 
 g_image_undistorter = ImageUndistorter()
