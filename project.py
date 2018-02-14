@@ -9,6 +9,7 @@ import glob
 import os
 import math
 import pickle
+import pdb
 
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
@@ -30,7 +31,7 @@ args = parser.parse_args()
 # X 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 # X 5. Detect lane pixels and fit to find the lane boundary.
 # _ 6. Determine the curvature of the lane and vehicle position with respect to center.
-# _ 7. Warp the detected lane boundaries back onto the original image.
+# X 7. Warp the detected lane boundaries back onto the original image.
 # _ 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 # 
 
@@ -522,6 +523,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     left_lane_inds = []
     right_lane_inds = []
 
+    #pdb.set_trace()
+
     # Step through the windows one by one
     for window in range(nwindows):
         # Identify window boundaries in x and y (and right and left)
@@ -544,6 +547,13 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
         # Append these indices to the lists
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
+        if 0:
+            print("window:", window)
+            print("  left, right x current:", leftx_current, rightx_current)
+            print("  y low, high:", win_y_low, win_y_high)
+            print("  x left low, high: ", win_xleft_low, win_xleft_high)
+            print("  x right low, high:", win_xright_low, win_xright_high)
+            print("  # pts left, right:", len(good_left_inds), len(good_right_inds))
         # If you found > minpix pixels, recenter next window on their mean position
         if len(good_left_inds) > minpix:
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
@@ -573,9 +583,10 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
         g_subplotter.setup(cols=2,rows=2)
         g_subplotter.next(orig_image, 'orig')
         g_subplotter.next(top_down_binary_image, 'top_down')
+        plt.plot(histogram)
 
         out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [255, 255, 255]
         #plt.imshow(out_img)
         g_subplotter.next(out_img, 'out')
         plt.plot(left_fitx, ploty, color='yellow')
@@ -619,11 +630,6 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # Define y-value where we want radius of curvature
     # I'll choose the maximum y-value, corresponding to the bottom of the image
     y_eval = np.max(ploty)
-    left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
-    right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
-    #print(left_curverad, right_curverad)
-    # Example values: 1926.74 1908.48
-    
 
     # Define conversions in x and y from pixels space to meters
     ym_per_pix = 30/720 # meters per pixel in y dimension
@@ -640,6 +646,25 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     plt.title(str(left_curverad) + "m " + str(right_curverad) + "m")
     # Example values: 632.1 m    626.2 m
 
+    # From project spec:
+    # "You can assume the camera is mounted at the center of the car, such that
+    # the lane center is the midpoint at the bottom of the image between the
+    # two lines you've detected. The offset of the lane center from the center
+    # of the image (converted from pixels to meters) is your distance from the
+    # center of the lane."
+    camera_center_x = img_width // 2
+    left_lane_bottom_x = np.polyval(left_fit, y_eval)
+    right_lane_bottom_x = np.polyval(right_fit, y_eval)
+    center_lane_bottom_x = (right_lane_bottom_x - left_lane_bottom_x)/2 + left_lane_bottom_x
+    center_offset_x = camera_center_x - center_lane_bottom_x
+    center_offset_m = center_offset_x * xm_per_pix
+    center_direction = "left"
+    if center_offset_x > 0:
+        center_direction = "right"
+    if 0:
+        print("left, center, right x:", left_lane_bottom_x, center_lane_bottom_x, right_lane_bottom_x)
+        print("camera at x:", camera_center_x, "which is ", center_offset_x, "pixels", center_direction, "from center of lane")
+
     # Create an image to draw the lines on
     warp_zero = np.zeros_like(top_down_binary_image).astype(np.uint8)
     color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
@@ -652,10 +677,15 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # Draw the lane onto the warped blank image
     cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 
+    # 7. Warp the detected lane boundaries back onto the original image.
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     newwarp = cv2.warpPerspective(color_warp, Minv, (orig_image.shape[1], orig_image.shape[0])) 
     # Combine the result with the original image
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
+    text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
+    cv2.putText(result, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
+    text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
+    cv2.putText(result, text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     #plt.imshow(result)
     #plt.show()
     if 1:
