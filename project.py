@@ -21,7 +21,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-v", '--verbose', action='store_true', help="be verbose")
 parser.add_argument("-c", '--calibrate', action='store_true', help="determine camera calibration")
 parser.add_argument("-n", '--num_images', type=int, help="number of images to process")
+parser.add_argument("-f", '--image_file', type=str, help="single image file to process")
+parser.add_argument("-m", '--video', action='store_true', help="process video instead of images")
 args = parser.parse_args()
+
+g_debug_internal = False
 
 # The goals / steps of this project are the following:
 # 
@@ -485,6 +489,7 @@ def create_top_down_image(orig_image, binary_image):
 
 # 5. Detect lane pixels and fit to find the lane boundary.
 def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
+    global g_debug_internal
     img_height = top_down_binary_image.shape[0]
     img_width = top_down_binary_image.shape[1]
     # Assuming you have created a warped binary image called "top_down_binary_image"
@@ -571,15 +576,18 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     righty = nonzeroy[right_lane_inds] 
     
     # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
+    if len(leftx) > 0:
+        left_fit = np.polyfit(lefty, leftx, 2)
+
+    if len(rightx) > 0:
+        right_fit = np.polyfit(righty, rightx, 2)
 
     # Generate x and y values for plotting
     ploty = np.linspace(0, img_height-1, img_height )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-    if 1:
+    if g_debug_internal:
         g_subplotter.setup(cols=2,rows=2)
         g_subplotter.next(orig_image, 'orig')
         g_subplotter.next(top_down_binary_image, 'top_down')
@@ -595,7 +603,7 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
         plt.ylim(720, 0)
         #plt.show()
 
-    if 1: 
+    if g_debug_internal: 
         # Create an image to draw on and an image to show the selection window
         out_img = np.dstack((top_down_binary_image, top_down_binary_image, top_down_binary_image))*255
         window_img = np.zeros_like(out_img)
@@ -636,15 +644,17 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     xm_per_pix = 3.7/700 # meters per pixel in x dimension
 
     # Fit new polynomials to x,y in world space
-    left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+    if len(leftx) > 0:
+        left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    if len(rightx) > 0:
+        right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
     # Calculate the new radii of curvature
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
     # Now our radius of curvature is in meters
-    print(left_curverad, 'm', right_curverad, 'm')
-    plt.title(str(left_curverad) + "m " + str(right_curverad) + "m")
-    # Example values: 632.1 m    626.2 m
+    #print(left_curverad, 'm', right_curverad, 'm')
+    if g_debug_internal: 
+        plt.title(str(left_curverad) + "m " + str(right_curverad) + "m")
 
     # From project spec:
     # "You can assume the camera is mounted at the center of the car, such that
@@ -683,15 +693,15 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # Combine the result with the original image
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
     text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
-    cv2.putText(result, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
+    cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
-    cv2.putText(result, text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
-    #plt.imshow(result)
-    #plt.show()
-    if 1:
+    cv2.putText(result, text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
+    if g_debug_internal: 
         plt.subplot(2,2,1)
         plt.imshow(result)
         g_subplotter.show()
+
+    return result
 
 
 def window_mask(width, height, img_ref, center,level):
@@ -778,19 +788,23 @@ def find_lane_lines_sliding_window(orig_image, top_down_binary_image):
     plt.title('window fitting results')
     plt.show()
     
-def process_image(image_filename):
+def process_image_file(image_filename):
     if args.verbose:
         print(image_filename)
 
     image = mpimg.imread(image_filename) # reads in as RGB
+    process_image(image)
+
+def process_image(image):
     image = g_image_undistorter.undistort(image)
 
     binary_image = create_binary_image(image)
 
     top_down_binary_image, Minv = create_top_down_image(image, binary_image)
 
-    find_lane_lines_basic(image, top_down_binary_image, Minv)
+    final_image = find_lane_lines_basic(image, top_down_binary_image, Minv)
     #find_lane_lines_sliding_window(image, top_down_binary_image)
+    return final_image
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def create_binary_image(image):
@@ -921,7 +935,7 @@ def create_binary_image(image):
     combined_binary = np.zeros_like(mag)
     combined_binary[(s_channel_thresh1 == 1) | (gradx == 1)] = 1
 
-    if 0:
+    if g_debug_internal:
         g_subplotter.setup(cols=2,rows=3)
         g_subplotter.next(image, 'orig')
         g_subplotter.next(s_channel, 's_channel')
@@ -933,23 +947,46 @@ def create_binary_image(image):
 
     return combined_binary
 
-def process_images(num):
+def process_images(num, filename=None):
     if args.verbose:
         print("Processing images")
 
-    image_filenames = glob.glob('test_images/*.jpg')
+    #image_filenames = glob.glob('test_images/*.jpg')
+    image_filenames = glob.glob('*.jpg')
+
+    if filename:
+        image_filenames = []
+        image_filenames.append(filename)
 
     count = 0
     for image_filename in image_filenames:
         if (num != None) and (count >= num):
             break
-        process_image(image_filename)
+        process_image_file(image_filename)
         count = count + 1
+
+def process_video(filename):
+    base_filename, file_ext = os.path.splitext(os.path.basename(filename))
+    output_filename_no_ext = os.path.join(".", base_filename)
+    output = output_filename_no_ext + "_processed" + file_ext
+
+    # Note: use this to extract 1 jpg per second from a video:
+    # -ss is the start time (19 seconds)
+    # -t is the time to run the video (5 seconds)
+    # -i is the input file
+    # -r is the frame rate at which to grab jpgs (1.0 per second)
+    # %4d adds an auto-incrementing file name
+    # ffmpeg -ss 00:00:19 -t 00:00:05 -i project_video.mp4 -r 1.0 testout%4d.jpg
+    clip = VideoFileClip(filename)
+    #NOTE: fl_image() expects color images!!
+    processed_clip = clip.fl_image(process_image).subclip(19,30) # seconds
+    processed_clip.write_videofile(output, audio=False)
 
 g_image_undistorter = ImageUndistorter()
 
 def main():
 
+    global g_debug_internal
     if args.verbose:
         print("being verbose")
 
@@ -958,7 +995,11 @@ def main():
 
     #test_undistortion()
 
-    process_images(args.num_images)
+    if args.video:
+        process_video("project_video.mp4")
+    else:
+        g_debug_internal = True
+        process_images(args.num_images, args.image_file)
 
 if __name__ == "__main__":
     main()
