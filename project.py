@@ -10,6 +10,7 @@ import os
 import math
 import pickle
 import pdb
+import sys
 
 # Import everything needed to edit/save/watch video clips
 from moviepy.editor import VideoFileClip
@@ -21,7 +22,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-v", '--verbose', action='store_true', help="be verbose")
 parser.add_argument("-c", '--calibrate', action='store_true', help="determine camera calibration")
 parser.add_argument("-n", '--num_images', type=int, help="number of images to process")
-parser.add_argument("-f", '--image_file', type=str, help="single image file to process")
+parser.add_argument("-f", '--image_files', type=str, help="file(s) to process, uses glob")
 parser.add_argument("-m", '--video', action='store_true', help="process video instead of images")
 args = parser.parse_args()
 
@@ -269,23 +270,24 @@ def plot_colors(rgb_image):
     # Then HSV_S is washed out in several, eliminate it
     # G isn't any better than R and sometimes worse, eliminate G
 
-    if False:
-        g_subplotter.setup(cols=3,rows=2)
-        g_subplotter.next(rgb_image, 'original')
+    if True:
+        g_subplotter.setup(cols=3,rows=3)
+        #g_subplotter.next(rgb_image, 'original')
         #g_subplotter.next(gray, 'gray')
         #g_subplotter.next(gray, 'gray2')
         g_subplotter.next(r_channel, 'R')
-        #g_subplotter.next(g_channel, 'G')
-        #g_subplotter.next(b_channel, 'B')
+        g_subplotter.next(g_channel, 'G')
+        g_subplotter.next(b_channel, 'B')
         #g_subplotter.next(hls_h_channel, 'HLS_H')
+        g_subplotter.next(rgb_image, 'orig')
         g_subplotter.next(hls_l_channel, 'HLS_L')
         g_subplotter.next(hls_s_channel, 'HLS_S')
-        #g_subplotter.next(hsv_h_channel, 'HSV_H')
-        #g_subplotter.next(hsv_s_channel, 'HSV_S')
+        g_subplotter.next(hsv_h_channel, 'HSV_H')
+        g_subplotter.next(hsv_s_channel, 'HSV_S')
         g_subplotter.next(hsv_v_channel, 'HSV_V')
         g_subplotter.show()
 
-    if True:
+    if False:
         # test_images/test1.jpg: light gray road, yellow + white lines
         #   HLS_S is the only one that works, but it misses some white lines
         #   R gives good white line visibility
@@ -816,9 +818,13 @@ def process_image_file(image_filename):
 def process_image(image):
     image = g_image_undistorter.undistort(image)
 
+    #plot_colors(image)
+    #return None
+
     binary_image = create_binary_image(image)
 
     top_down_binary_image, Minv = create_top_down_image(image, binary_image)
+    #return
 
     final_image = find_lane_lines_basic(image, top_down_binary_image, Minv)
     #find_lane_lines_sliding_window(image, top_down_binary_image)
@@ -826,6 +832,7 @@ def process_image(image):
 
 # 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 def create_binary_image(image):
+
     r_channel = image[:,:,0]
     #g_channel = image[:,:,1]
     #b_channel = image[:,:,2]
@@ -860,11 +867,18 @@ def create_binary_image(image):
     #g_subplotter.show()
 
     if 0: # gradx,y
-        grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(5,100))
-        grad2 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
-        grad3 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(30,100))
-        grad4 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(50,100))
-        grad5 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(75,100))
+        #grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(5,100))
+        #grad2 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
+        #grad3 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(30,100))
+        #grad4 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(50,100))
+        #grad5 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(75,100))
+
+        grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad2 = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad3 = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(30,100))
+        grad4 = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(50,100)) # winner
+        # 50,100 is the winner because it's low noise and still picks up white lines well
+        grad5 = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(75,100))
 
         #grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(5,100))
         #grad2 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(10,100))
@@ -881,12 +895,11 @@ def create_binary_image(image):
 
         g_subplotter.setup(cols=2,rows=3)
         g_subplotter.next(image, 'orig')
-        #g_subplotter.next(s_channel, 'HLS_X')
-        g_subplotter.next(grad1, 'gradx1')
+        g_subplotter.next(grad1, 'S_channel grad')
         g_subplotter.next(grad2, 'grad2')
         g_subplotter.next(grad3, 'grad3')
         g_subplotter.next(grad4, 'grad4')
-        g_subplotter.next(grad4, 'grad5')
+        g_subplotter.next(grad5, 'grad5')
         g_subplotter.show()
 
     if 0: # direction
@@ -927,55 +940,72 @@ def create_binary_image(image):
         g_subplotter.show()
 
     if 0: # color thresh
-        #s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
-        #s_channel_thresh2 = color_threshold(s_channel, thresh=(200,255))
-        #s_channel_thresh3 = color_threshold(s_channel, thresh=(215,255))
-        #s_channel_thresh4 = color_threshold(s_channel, thresh=(230,255))
+        #thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
+        #thresh2 = color_threshold(s_channel, thresh=(200,255))
+        #thresh3 = color_threshold(s_channel, thresh=(215,255))
+        #thresh4 = color_threshold(s_channel, thresh=(230,255))
 
-        s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
-        s_channel_thresh2 = color_threshold(s_channel, thresh=(150,255))
-        s_channel_thresh3 = color_threshold(s_channel, thresh=(125,255))
-        s_channel_thresh4 = color_threshold(s_channel, thresh=(100,255)) # good in the shady spots
+        #thresh1 = color_threshold(s_channel, thresh=(170,255)) # winner
+        #thresh2 = color_threshold(s_channel, thresh=(150,255))
+        #thresh3 = color_threshold(s_channel, thresh=(125,255))
+        #thresh4 = color_threshold(s_channel, thresh=(100,255)) # good in the shady spots
+
+        #thresh1 = color_threshold(r_channel, thresh=(170,255)) # winner
+        #thresh2 = color_threshold(r_channel, thresh=(150,255))
+        #thresh3 = color_threshold(r_channel, thresh=(125,255))
+        #thresh4 = color_threshold(r_channel, thresh=(100,255))
+
+        thresh1 = color_threshold(r_channel, thresh=(170,255)) # winner
+        thresh2 = color_threshold(r_channel, thresh=(190,255))
+        thresh3 = color_threshold(r_channel, thresh=(210,255))
+        thresh4 = color_threshold(r_channel, thresh=(230,255))
 
         g_subplotter.setup(cols=2,rows=3)
         g_subplotter.next(image, 'orig')
-        g_subplotter.next(s_channel, 's_channel')
-        g_subplotter.next(s_channel_thresh1, 's_1')
-        g_subplotter.next(s_channel_thresh2, 's_2')
-        g_subplotter.next(s_channel_thresh3, 's_3')
-        g_subplotter.next(s_channel_thresh4, 's_4')
+        #g_subplotter.next(s_channel, 's_channel')
+        g_subplotter.next(r_channel, 'r_channel')
+        g_subplotter.next(thresh1, '1')
+        g_subplotter.next(thresh2, '2')
+        g_subplotter.next(thresh3, '3')
+        g_subplotter.next(thresh4, '4')
         g_subplotter.show()
 
     s_channel_thresh1 = color_threshold(s_channel, thresh=(170,255))
+    r_gradx = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(50,100))
     gradx = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
     mag = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
 
     combined_binary = np.zeros_like(mag)
     combined_binary[(s_channel_thresh1 == 1) | (gradx == 1)] = 1
+    combined_binary_r = np.zeros_like(mag)
+    combined_binary_r[(s_channel_thresh1 == 1) | (gradx == 1) | (r_gradx == 1)] = 1 
 
     if g_debug_internal:
-        g_subplotter.setup(cols=2,rows=3)
+        g_subplotter.setup(cols=3,rows=3)
         g_subplotter.next(image, 'orig')
         g_subplotter.next(s_channel, 's_channel')
         g_subplotter.next(s_channel_thresh1, 's_thresh')
+        g_subplotter.next(r_channel, 'r_channel')
+        g_subplotter.next(r_gradx, 'r_gradx')
         g_subplotter.next(gradx, 'gradx')
         g_subplotter.next(mag, 'mag')
         g_subplotter.next(combined_binary, 's_thresh|gradx')
+        g_subplotter.next(combined_binary_r, 's_thresh|gradx|r')
         g_subplotter.show()
 
-    return combined_binary
+    return combined_binary_r
 
-def process_images(num, filename=None):
+def process_images(num, filenames=None):
     if args.verbose:
         print("Processing images")
 
-    #image_filenames = glob.glob('test_images/*.jpg')
-    image_filenames = glob.glob('*.jpg')
+    if filenames:
+        image_filenames = glob.glob(filenames)
+        #image_filenames = image_filenames + glob.glob('test_images/*.jpg')
+    else:
+        image_filenames = glob.glob('test_images/*.jpg')
 
-    if filename:
-        image_filenames = []
-        image_filenames.append(filename)
-
+    #print("files:", image_filenames)
     count = 0
     for image_filename in image_filenames:
         if (num != None) and (count >= num):
@@ -1015,9 +1045,11 @@ def main():
 
     if args.video:
         process_video("project_video.mp4")
+        #process_video("challenge_video.mp4")
+        #process_video("harder_challenge_video.mp4")
     else:
         g_debug_internal = True
-        process_images(args.num_images, args.image_file)
+        process_images(args.num_images, args.image_files)
 
 if __name__ == "__main__":
     main()
