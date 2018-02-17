@@ -1,10 +1,8 @@
-## Writeup Template
-
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
----
+## Advanced Lane Finding Writeup
 
 **Advanced Lane Finding Project**
+
+*Submitted by Chris Svec*
 
 The goals / steps of this project are the following:
 
@@ -19,7 +17,7 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./examples/undistort_output.png "Undistorted"
+[distortion_img]:   ./output_images/calibration2-undistorted.png "Distorted and undistorted images"
 [image2]: ./test_images/test1.jpg "Road Transformed"
 [image3]: ./examples/binary_combo_example.jpg "Binary Example"
 [image4]: ./examples/warped_straight_lines.jpg "Warp Example"
@@ -33,9 +31,9 @@ The goals / steps of this project are the following:
 
 ---
 
-### Writeup / README
+### Writeup
 
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
+#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.
 
 You're reading it!
 
@@ -43,13 +41,29 @@ You're reading it!
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+All code for this project is in the [project.py](project.py) Python 3 file.
 
-I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+The code for this step is in the calibrate_camera() function starting at line 136. 
 
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
+I started with the code from the lectures and modified it to suit this project.
 
-![alt text][image1]
+Camera calibration starts with several 6x9 checkerboard images. These images are
+of the same physical checkerboard taken from different angles and distances.
+The checkerboard images are fed into the OpenCV findChessboardCorners() function,
+which locates each checkerboard corner in each checkerboard image.
+
+The corner locations and corresponding 6x9 grid locations are fed into the
+OpenCV calibrateCamera() function, which returns the distortion coefficients
+needed to remote camera distortion from images taken with that camera.
+
+The OpenCV undistort() function takes these distortion coefficients and an
+original distorted image and returns an undistorted image.
+
+Here is an original, distorted image and the undistorted version:
+![alt text][distortion_img]
+
+You can see the curvature on the top of the original, distorted image on the
+left. The undistorted image on the right has a flat top.
 
 ### Pipeline (single images)
 

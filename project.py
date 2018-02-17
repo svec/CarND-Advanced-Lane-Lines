@@ -36,9 +36,9 @@ g_error_frames = 0
 # X 3. Use color transforms, gradients, etc., to create a thresholded binary image.
 # X 4. Apply a perspective transform to rectify binary image ("birds-eye view").
 # X 5. Detect lane pixels and fit to find the lane boundary.
-# _ 6. Determine the curvature of the lane and vehicle position with respect to center.
+# X 6. Determine the curvature of the lane and vehicle position with respect to center.
 # X 7. Warp the detected lane boundaries back onto the original image.
-# _ 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
+# X 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 # 
 
 class Subplotter:
@@ -202,7 +202,8 @@ def calibrate_camera():
     plt.show()
 
 def test_undistortion():
-    img = cv2.imread('test_images/test1.jpg')
+    #img = cv2.imread('test_images/test1.jpg')
+    img = cv2.imread('camera_cal/calibration2.jpg')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     image_undistorter = ImageUndistorter()
     dst = image_undistorter.undistort(img)
@@ -211,6 +212,7 @@ def test_undistortion():
     ax1.set_title('Original Image', fontsize=30)
     ax2.imshow(dst)
     ax2.set_title('Undistorted Image', fontsize=30) 
+    plt.savefig("calibration2-undistorted.png", bbox_inches='tight')
     plt.show()
 
 def raw_threshold(image, s_min, s_max):
@@ -646,7 +648,7 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
         plt.xlim(0, 1280)
         plt.ylim(720, 0)
 
-    # _ 6. Determine the curvature of the lane and vehicle position with respect to center.
+    # 6. Determine the curvature of the lane and vehicle position with respect to center.
 
     # Define y-value where we want radius of curvature
     # I'll choose the maximum y-value, corresponding to the bottom of the image
@@ -705,7 +707,9 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # 7. Warp the detected lane boundaries back onto the original image.
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     newwarp = cv2.warpPerspective(color_warp, Minv, (orig_image.shape[1], orig_image.shape[0])) 
+
     # Combine the result with the original image
+    # 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
     text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
     cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
@@ -1041,7 +1045,8 @@ def main():
     if args.calibrate:
         calibrate_camera()
 
-    #test_undistortion()
+    test_undistortion()
+    sys.exit(1)
 
     if args.video:
         process_video("project_video.mp4")
