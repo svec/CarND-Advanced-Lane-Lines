@@ -203,9 +203,8 @@ def calibrate_camera():
     plt.show()
 
 def test_undistortion():
-    #img = cv2.imread('test_images/test1.jpg')
-    img = cv2.imread('camera_cal/calibration2.jpg')
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = cv2.imread('test_images/test1.jpg')
+    #img = cv2.imread('camera_cal/calibration2.jpg')
     image_undistorter = ImageUndistorter()
     dst = image_undistorter.undistort(img)
     f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
@@ -213,8 +212,9 @@ def test_undistortion():
     ax1.set_title('Original Image', fontsize=30)
     ax2.imshow(dst)
     ax2.set_title('Undistorted Image', fontsize=30) 
-    plt.savefig("calibration2-undistorted.png", bbox_inches='tight')
+    #plt.savefig("calibration2-undistorted.png", bbox_inches='tight')
     plt.show()
+    #cv2.imwrite("test1-undistorted.jpg",dst)
 
 def raw_threshold(image, s_min, s_max):
     thresholded = np.zeros_like(image)
@@ -416,7 +416,13 @@ def create_top_down_image(orig_image, binary_image):
     binary_image_copy = np.copy(binary_image)
     masked_binary_image = region_of_interest(binary_image, bounding_shape)
 
-
+    if 0: #writeup
+        masked = region_of_interest(orig_image, bounding_shape)
+        g_subplotter.setup(cols=2,rows=1)
+        g_subplotter.next(orig_image, 'orig')
+        g_subplotter.next(masked, 'masked')
+        plt.savefig("writeup-mask.png", bbox_inches='tight')
+        g_subplotter.show()
 
     src_top_right_x = 700 - 10
     src_top_y = 448
@@ -435,19 +441,19 @@ def create_top_down_image(orig_image, binary_image):
                       ])
     if 0:
         lines_on_orig_image = np.copy(orig_image)
-        #cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
-        #cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
-        #cv2.line(lines_on_orig_image, tuple(src[2]), tuple(src[3]), color=[255,0,0], thickness=1)
-        #cv2.line(lines_on_orig_image, tuple(src[3]), tuple(src[0]), color=[255,0,0], thickness=1)
-        cv2.line(lines_on_orig_image, mask_lower_left, mask_upper_left, color=[255,0,0], thickness=3)
-        cv2.line(lines_on_orig_image, mask_upper_left, mask_upper_right, color=[255,0,0], thickness=3)
-        cv2.line(lines_on_orig_image, mask_upper_right, mask_lower_right, color=[255,0,0], thickness=3)
-        cv2.line(lines_on_orig_image, mask_lower_right, mask_lower_left, color=[255,0,0], thickness=3)
-        g_subplotter.setup(cols=2,rows=2)
+        cv2.line(lines_on_orig_image, tuple(src[0]), tuple(src[1]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[1]), tuple(src[2]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[2]), tuple(src[3]), color=[255,0,0], thickness=1)
+        cv2.line(lines_on_orig_image, tuple(src[3]), tuple(src[0]), color=[255,0,0], thickness=1)
+        #cv2.line(lines_on_orig_image, mask_lower_left, mask_upper_left, color=[255,0,0], thickness=3)
+        #cv2.line(lines_on_orig_image, mask_upper_left, mask_upper_right, color=[255,0,0], thickness=3)
+        #cv2.line(lines_on_orig_image, mask_upper_right, mask_lower_right, color=[255,0,0], thickness=3)
+        #cv2.line(lines_on_orig_image, mask_lower_right, mask_lower_left, color=[255,0,0], thickness=3)
+        g_subplotter.setup(cols=2,rows=1)
         g_subplotter.next(lines_on_orig_image, 'orig')
-        g_subplotter.next(binary_image_copy, 'binary orig')
-        g_subplotter.next(masked_binary_image, 'masked binary')
-        g_subplotter.show()
+        #g_subplotter.next(binary_image_copy, 'binary orig')
+        #g_subplotter.next(masked_binary_image, 'masked binary')
+        #g_subplotter.show()
 
     # For destination points, I'm arbitrarily choosing some points to be
     # a nice fit for displaying our warped result 
@@ -486,9 +492,11 @@ def create_top_down_image(orig_image, binary_image):
         cv2.line(lines_on_transformed_image,
                  (dst_left_x+delta_left_x, dst_top_y), (dst_left_x+delta_left_x, dst_bottom_y),
                  color=[0, 255,0], thickness=1)
+        #g_subplotter.setup(cols=3,rows=1)
         g_subplotter.next(lines_on_transformed_image, 'trans')
-        g_subplotter.next(binary_image, 'orig_binary')
-        g_subplotter.next(top_down, 'top_down_binary')
+        plt.savefig("writeup-trans.png", bbox_inches='tight')
+        #g_subplotter.next(binary_image, 'orig_binary')
+        #g_subplotter.next(top_down, 'top_down_binary')
         g_subplotter.show()
 
     return top_down, Minv
@@ -712,7 +720,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # Combine the result with the original image
     # 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
-    text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
+    #text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
+    text = "Lane curvature: {:3.2f}m".format(left_curverad)
     cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
     cv2.putText(result, text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
@@ -997,6 +1006,13 @@ def create_binary_image(image):
         g_subplotter.next(combined_binary, 's_thresh|gradx')
         g_subplotter.next(combined_binary_r, 's_thresh|gradx|r')
         g_subplotter.show()
+
+        if 0: #writeup
+            g_subplotter.setup(cols=2,rows=1)
+            g_subplotter.next(image, 'orig')
+            g_subplotter.next(combined_binary_r, 'final')
+            plt.savefig("writeup-binary.png", bbox_inches='tight')
+            g_subplotter.show()
 
     return combined_binary_r
 

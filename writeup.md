@@ -2,7 +2,7 @@
 
 **Advanced Lane Finding Project**
 
-*Submitted by Chris Svec*
+*Submitted by Chris Svec, February 2018*
 
 The goals / steps of this project are the following:
 
@@ -17,13 +17,13 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[distortion_img]:   ./output_images/calibration2-undistorted.png "Distorted and undistorted images"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[distortion_image]:   ./output_images/calibration2-undistorted.png "Distorted and undistorted images"
+[distortion_test]: ./output_images/test1-undistorted.jpg "Undistorted test image"
+[binary_image]: ./output_images/writeup-binary.png "Thresholded binary image"
+[masked_image]: ./output_images/writeup-mask.png "Masked image"
+[transformed_image]: ./output_images/writeup-trans.png "Transformed image"
+[lane_image]: ./output_images/writeup-lane-finding.png "Finding lanes"
+[final_image]: ./output_images/writeup-final.png "Final output"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -47,7 +47,7 @@ The code for this step is in the calibrate_camera() function starting at line 13
 
 I started with the code from the lectures and modified it to suit this project.
 
-Camera calibration starts with several 6x9 checkerboard images. These images are
+Camera calibration started with several 6x9 checkerboard images. These images are
 of the same physical checkerboard taken from different angles and distances.
 The checkerboard images are fed into the OpenCV findChessboardCorners() function,
 which locates each checkerboard corner in each checkerboard image.
@@ -60,69 +60,111 @@ The OpenCV undistort() function takes these distortion coefficients and an
 original distorted image and returns an undistorted image.
 
 Here is an original, distorted image and the undistorted version:
-![alt text][distortion_img]
+![alt text][distortion_image]
 
 You can see the curvature on the top of the original, distorted image on the
-left. The undistorted image on the right has a flat top.
+left. The curve is gone in the undistorted image on the right: it has a flat top.
 
 ### Pipeline (single images)
 
 #### 1. Provide an example of a distortion-corrected image.
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+I applied distortion correction to each image on line 824. Here's an example of an
+undistorted version of one of the Udacity supplied test images:
+
+![alt text][distortion_test]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used the create_binary_image() function to create a thresholded binary image.
 
-![alt text][image3]
+I created the thresholded binary image by combining:
+1. The HLS S channel data where values >= 170 (out of 255)
+2. The 'x' gradient (Sobel) applied to the HLS S channel data thresholded by (25,100)
+3. The 'x' gradient (Sobel) applied to the RGB R channel data thresholded by (50,100)
+
+The final image is created in lines 978-986.
+
+Here's an example of an original image and its binary thresholded output:
+
+![alt text][binary_image]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+The perspective transform happens in the function create_top_down_image().
 
-```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
-```
+Before transforming the perspective, I masked off the camera view directly in
+front of the car so that only it is considered in the rest of the pipeline. This
+is done with the region_of_interest() call at line 417.
 
-This resulted in the following source and destination points:
+The actual masking was done on the binary thresholded image, but here is what the
+mask looks like on the original image (it's easier to tell what's masked in this
+color image):
 
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+![alt text][masked_image]
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+The perspective transform happens starting at line 427. I created a quadrilateral
+for the original image, and mapped that onto a rectangle in the transformed image.
 
-![alt text][image4]
+The quadrilateral applied to the first image was determined by trial and error,
+as suggested by the Udacity lectures.  I started with an image of a straight
+road. I displayed the quadrilateral on the first image and the rectangle on the
+transformed image and tweaked the quadrilateral size and shape until the lane
+lines in the transformed image were vertical and parallel.
+
+The perspective transform was done with the OpenCV getPerspectiveTransform() and
+warpPerspective() functions.
+
+This example shows the quadrilateral drawn in red lines on the left image, and
+the rectangle drawn in red lines on the right image. The vertical green lines
+on the right image were drawn at the lane edges to visually verify that the
+lanes were vertical:
+
+![alt text][transformed_image]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+To identify lane lines and fit them to a polynomial, I boldly ~~stole~~ used the
+Udacity lecture's suggested code in my find_lane_lines_basic() function.
 
-![alt text][image5]
+This code starts with the bottom half of transformed binary image. It finds the
+window with the most non-zero pixels on the left half and right half of the
+image and uses those as the starting points for the left lane and right lane.
+
+It then moves the window up the image looking for more non-zero pixels in the
+windows. It shifts the window left or right based on the average position of the
+non-zero pixels in the previous window. All the non-zero points within the left
+windows are used for the left lane points, and all the non-zero points within
+right windows are used for the right lane points.
+
+This picture shows the windows in the green, the left lane points in red and the
+right lane points in white. Points that fall outside of any of the windows are
+not used.
+
+![alt text][lane_image]
+
+The numpy polyfit() function is used to fit the left and right lane points to a
+second order polynomial, which are drawn as yellow lines in that image.
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+I calculated the radius of curvature of the lanes and the position of the
+vehicle around using the algorithms described in lecture.
+
+Basically I mapped the pixels to the real world distances using the estimates
+provided in lecture, and as Will Smith says, I got mathy with it in lines
+664-679.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step starting at line 705. The polyfit lane lines were drawn
+onto a blank image and filled in with green. This image was then perspective
+transformed back to the original image orientation using the inverse perspective
+matrix and the warpPerspective() function. The resulting image showed the lane
+lines in the same perspective as the original image, which results in a final
+image like this:
 
-![alt text][image6]
+![alt text][final_image]
 
 ---
 
@@ -130,7 +172,7 @@ I implemented this step in lines # through # in my code in `yet_another_file.py`
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output_images/project_video_processed.mp4)
 
 ---
 
@@ -138,4 +180,10 @@ Here's a [link to my video result](./project_video.mp4)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+The pipeline has a hard time seeing white lines on lighter gray pavement. I
+added the RGB Red channel to improve the visibility of these lines, but it could
+be improved.
+
+Varying colors in the pavement between lane lines also slightly confuses my
+pipeline: perhaps some pixel masking could help, or some better color filtering
+methods.
