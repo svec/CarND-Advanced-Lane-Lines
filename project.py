@@ -29,6 +29,7 @@ args = parser.parse_args()
 g_debug_internal = False
 g_error_frames = 0
 
+
 # The goals / steps of this project are the following:
 # 
 # X 1. Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
