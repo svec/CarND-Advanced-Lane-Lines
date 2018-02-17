@@ -1046,8 +1046,7 @@ def main():
     if args.calibrate:
         calibrate_camera()
 
-    test_undistortion()
-    sys.exit(1)
+    #test_undistortion()
 
     if args.video:
         process_video("project_video.mp4")
