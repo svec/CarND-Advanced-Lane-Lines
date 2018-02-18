@@ -613,7 +613,7 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
 
     if g_debug_internal:
         g_subplotter.setup(cols=2,rows=2)
-        g_subplotter.next(orig_image, 'orig')
+        g_subplotter.next(orig_image, '')
         g_subplotter.next(top_down_binary_image, 'top_down')
         plt.plot(histogram)
 
@@ -664,8 +664,9 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     y_eval = np.max(ploty)
 
     # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30/720 # meters per pixel in y dimension
-    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+    ym_per_pix = 37/720 # meters per pixel in y dimension, assuming lane lines are 10 feet long
+                        # and spaces between lane lines are 30 feet long.
+    xm_per_pix = 3.7/500 # meters per pixel in x dimension, assuming standard lane width of 3.7m
 
     # Fit new polynomials to x,y in world space
     left_fit_cr = (0,1,0)
