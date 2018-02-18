@@ -28,6 +28,7 @@ args = parser.parse_args()
 
 g_debug_internal = False
 g_error_frames = 0
+g_filename = "none"
 
 
 # The goals / steps of this project are the following:
@@ -237,6 +238,11 @@ def plot_colors(rgb_image):
     hsv_s_channel = hsv[:,:,1]
     hsv_v_channel = hsv[:,:,2]
 
+    lab = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2LAB)
+    lab_l_channel = lab[:,:,0]
+    lab_a_channel = lab[:,:,1]
+    lab_b_channel = lab[:,:,2]
+
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
     # Explore gradients in other colors spaces / color channels to see what might work better
@@ -285,9 +291,12 @@ def plot_colors(rgb_image):
         g_subplotter.next(rgb_image, 'orig')
         g_subplotter.next(hls_l_channel, 'HLS_L')
         g_subplotter.next(hls_s_channel, 'HLS_S')
-        g_subplotter.next(hsv_h_channel, 'HSV_H')
-        g_subplotter.next(hsv_s_channel, 'HSV_S')
-        g_subplotter.next(hsv_v_channel, 'HSV_V')
+        #g_subplotter.next(hsv_h_channel, 'HSV_H')
+        #g_subplotter.next(hsv_s_channel, 'HSV_S')
+        #g_subplotter.next(hsv_v_channel, 'HSV_V')
+        g_subplotter.next(lab_l_channel, 'LAB_L')
+        g_subplotter.next(lab_a_channel, 'LAB_A')
+        g_subplotter.next(lab_b_channel, 'LAB_B')
         g_subplotter.show()
 
     if False:
@@ -499,12 +508,14 @@ def create_top_down_image(orig_image, binary_image):
         #g_subplotter.next(top_down, 'top_down_binary')
         g_subplotter.show()
 
-    return top_down, Minv
+    return top_down, Minv, masked_binary_image
 
 # 5. Detect lane pixels and fit to find the lane boundary.
-def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
+def find_lane_lines_basic(orig_image, top_down_binary_image, Minv, binary_image):
     global g_debug_internal
     global g_error_frames
+    global g_filename
+
     img_height = top_down_binary_image.shape[0]
     img_width = top_down_binary_image.shape[1]
     # Assuming you have created a warped binary image called "top_down_binary_image"
@@ -613,7 +624,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
 
     if g_debug_internal:
         g_subplotter.setup(cols=2,rows=2)
-        g_subplotter.next(orig_image, '')
+        g_subplotter.next(orig_image, g_filename)
+        g_subplotter.next(binary_image, 'binary')
         g_subplotter.next(top_down_binary_image, 'top_down')
         plt.plot(histogram)
 
@@ -651,11 +663,11 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
         cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
         result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
         #plt.imshow(result)
-        g_subplotter.next(result, 'result')
-        plt.plot(left_fitx, ploty, color='yellow')
-        plt.plot(right_fitx, ploty, color='yellow')
-        plt.xlim(0, 1280)
-        plt.ylim(720, 0)
+        #g_subplotter.next(result, 'result')
+        #plt.plot(left_fitx, ploty, color='yellow')
+        #plt.plot(right_fitx, ploty, color='yellow')
+        #plt.xlim(0, 1280)
+        #plt.ylim(720, 0)
 
     # 6. Determine the curvature of the lane and vehicle position with respect to center.
 
@@ -721,8 +733,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv):
     # Combine the result with the original image
     # 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
-    #text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
-    text = "Lane curvature: {:3.2f}m".format(left_curverad)
+    text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
+    #text = "Lane curvature: {:3.2f}m".format(left_curverad)
     cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
     cv2.putText(result, text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
@@ -824,6 +836,9 @@ def find_lane_lines_sliding_window(orig_image, top_down_binary_image):
     plt.show()
     
 def process_image_file(image_filename):
+    global g_filename
+    g_filename = image_filename
+
     if args.verbose:
         print(image_filename)
 
@@ -838,10 +853,10 @@ def process_image(image):
 
     binary_image = create_binary_image(image)
 
-    top_down_binary_image, Minv = create_top_down_image(image, binary_image)
+    top_down_binary_image, Minv, binary_image_masked = create_top_down_image(image, binary_image)
     #return
 
-    final_image = find_lane_lines_basic(image, top_down_binary_image, Minv)
+    final_image = find_lane_lines_basic(image, top_down_binary_image, Minv, binary_image_masked)
     #find_lane_lines_sliding_window(image, top_down_binary_image)
     return final_image
 
@@ -857,6 +872,11 @@ def create_binary_image(image):
     #h_channel = hls[:,:,0]
     #l_channel = hls[:,:,1]
     s_channel = hls[:,:,2]
+
+    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    lab_l = lab[:,:,0]
+    lab_a = lab[:,:,1]
+    lab_b = lab[:,:,2]
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
@@ -990,12 +1010,192 @@ def create_binary_image(image):
     gradx = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
     mag = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
 
-    combined_binary = np.zeros_like(mag)
-    combined_binary[(s_channel_thresh1 == 1) | (gradx == 1)] = 1
-    combined_binary_r = np.zeros_like(mag)
-    combined_binary_r[(s_channel_thresh1 == 1) | (gradx == 1) | (r_gradx == 1)] = 1 
+    grad_L = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100))
+    thresh_L = color_threshold(lab_l, thresh=(200,255))
+    grad_thresh_L = abs_sobel_thresh(thresh_L, orient='x', sobel_kernel=ksize, thresh=(25,100))
 
-    if g_debug_internal:
+    grad_B = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100))
+    thresh_B = color_threshold(lab_b, thresh=(143,255))
+    grad_thresh_B = abs_sobel_thresh(thresh_B, orient='x', sobel_kernel=ksize, thresh=(25,100))
+
+    combined_binary = np.zeros_like(mag)
+    combined_binary[(grad_thresh_L == 1) | (grad_thresh_B == 1) | (r_gradx == 1)] = 1
+
+    #combined_binary = np.zeros_like(mag)
+    #combined_binary[(s_channel_thresh1 == 1) | (gradx == 1)] = 1
+    #combined_binary = np.zeros_like(mag)
+    #combined_binary[(s_channel_thresh1 == 1) | (gradx == 1) | (r_gradx == 1)] = 1 
+
+    if 0:
+        g_subplotter.setup(cols=3,rows=4)
+        g_subplotter.next(image, g_filename)
+        g_subplotter.next(lab_l, 'lab_l')
+        g_subplotter.next(lab_b, 'lab_b')
+
+        grad_L = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        thresh_L = color_threshold(lab_l, thresh=(200,255))
+        grad_thresh_L = abs_sobel_thresh(thresh_L, orient='x', sobel_kernel=ksize, thresh=(25,100))
+
+        grad_B = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        thresh_B = color_threshold(lab_b, thresh=(143,255))
+        grad_thresh_B = abs_sobel_thresh(thresh_B, orient='x', sobel_kernel=ksize, thresh=(25,100))
+
+        g_subplotter.next(grad_L, 'grad_L')
+        g_subplotter.next(thresh_L, 'thresh_L')
+        g_subplotter.next(grad_thresh_L, 'grad_thresh_L')
+
+        g_subplotter.next(grad_B, 'grad_B')
+        g_subplotter.next(thresh_B, 'thresh_B')
+        g_subplotter.next(grad_thresh_B, 'grad_thresh_B')
+
+        g_subplotter.next(s_channel_thresh1, 's_thresh')
+        g_subplotter.next(r_gradx, 'r_gradx')
+        g_subplotter.next(gradx, 'gradx')
+
+        g_subplotter.show()
+
+    if 0:
+        g_subplotter.setup(cols=3,rows=3)
+        g_subplotter.next(image, g_filename)
+        g_subplotter.next(lab_l, 'lab_l')
+        g_subplotter.next(lab_b, 'lab_b')
+
+        #grad = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        #thresh1 = color_threshold(lab_l, thresh=(100,255))
+        #thresh2 = color_threshold(lab_l, thresh=(200,255)) # winner
+        #thresh3 = color_threshold(lab_l, thresh=(210,255))
+        #thresh4 = color_threshold(lab_l, thresh=(225,255))
+        #thresh5 = color_threshold(lab_l, thresh=(240,255))
+
+        grad = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        #thresh1 = color_threshold(lab_b, thresh=(100,255))
+        #thresh2 = color_threshold(lab_b, thresh=(200,255))
+        #thresh3 = color_threshold(lab_b, thresh=(210,255))
+        #thresh4 = color_threshold(lab_b, thresh=(225,255))
+        #thresh5 = color_threshold(lab_b, thresh=(240,255)) # all are bad
+
+        #thresh1 = color_threshold(lab_b, thresh=(100,255))
+        #thresh2 = color_threshold(lab_b, thresh=(125,255))
+        #thresh3 = color_threshold(lab_b, thresh=(150,255)) #winner
+        #thresh4 = color_threshold(lab_b, thresh=(175,255))
+        #thresh5 = color_threshold(lab_b, thresh=(200,255))
+        
+        thresh1 = color_threshold(lab_b, thresh=(132,255))
+        thresh2 = color_threshold(lab_b, thresh=(135,255))
+        thresh3 = color_threshold(lab_b, thresh=(140,255))
+        thresh4 = color_threshold(lab_b, thresh=(143,255)) # winner
+        thresh5 = color_threshold(lab_b, thresh=(145,255))
+
+        #thresh1 = color_threshold(lab_b, thresh=(150,255)) # winner
+        #thresh2 = color_threshold(lab_b, thresh=(150,230))
+        #thresh3 = color_threshold(lab_b, thresh=(150,210))
+        #thresh4 = color_threshold(lab_b, thresh=(150,195))
+        #thresh5 = color_threshold(lab_b, thresh=(150,175))
+
+        g_subplotter.next(grad, 'grad')
+        g_subplotter.next(thresh1, 'thresh1')
+        g_subplotter.next(thresh2, 'thresh2')
+        g_subplotter.next(thresh3, 'thresh3')
+        g_subplotter.next(thresh4, 'thresh4')
+        g_subplotter.next(thresh5, 'thresh5')
+        g_subplotter.show()
+
+    if 0: # try out LAB
+        g_subplotter.setup(cols=3,rows=3)
+        g_subplotter.next(image, g_filename)
+        g_subplotter.next(lab_l, 'lab_l')
+        g_subplotter.next(lab_b, 'lab_b')
+
+        #grad1 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(5,100))
+        #grad2 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(15,100))
+        #grad3 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
+        #grad4 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(50,100))
+        #grad5 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(75,100))
+        #grad6 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(5,250))
+        #grad1 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,50))
+        #grad2 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,75))
+        #grad3 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner
+        #grad4 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,125))
+        #grad5 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,150))
+        #grad6 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,200))
+
+        #grad1 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(5,100))
+        #grad2 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(15,100))
+        #grad3 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner?
+        #grad4 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(50,100)) # winner?
+        #grad5 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(75,100))
+        #grad6 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(5,250))
+
+        grad1 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,50))
+        grad2 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100)) # winner?
+        grad3 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,150)) # winner?
+        grad4 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,200))
+        grad5 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,250))
+        grad6 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(5,250))
+
+        g_subplotter.next(grad1, 'grad1')
+        g_subplotter.next(grad2, 'grad2')
+        g_subplotter.next(grad3, 'grad3')
+        g_subplotter.next(grad4, 'grad4')
+        g_subplotter.next(grad5, 'grad5')
+        g_subplotter.next(grad6, 'grad6')
+
+        g_subplotter.show()
+
+    if 0: # try out LAB
+        g_subplotter.setup(cols=3,rows=4)
+        g_subplotter.next(image, g_filename)
+        g_subplotter.next(lab_l, 'lab_l')
+        g_subplotter.next(lab_b, 'lab_b')
+
+        grad1 = abs_sobel_thresh(lab_l, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad2 = abs_sobel_thresh(lab_l, orient='y', sobel_kernel=ksize, thresh=(25,100))
+        mag = mag_thresh(lab_l, sobel_kernel=ksize, thresh=(30, 100))
+        g_subplotter.next(grad1, 'grad1 L') #winner?
+        g_subplotter.next(grad2, 'grad2 L')
+        g_subplotter.next(mag, 'mag L')
+
+        grad1 = abs_sobel_thresh(lab_b, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad2 = abs_sobel_thresh(lab_b, orient='y', sobel_kernel=ksize, thresh=(25,100))
+        mag = mag_thresh(lab_b, sobel_kernel=ksize, thresh=(30, 100))
+        g_subplotter.next(grad1, 'grad1 B')
+        g_subplotter.next(grad2, 'grad2 B')
+        g_subplotter.next(mag, 'mag B')
+
+        lab_l_thresh = color_threshold(lab_l, thresh=(170,255))
+        lab_b_thresh = color_threshold(lab_l, thresh=(170,255))
+        g_subplotter.next(lab_l_thresh, "L thresh")
+        g_subplotter.next(lab_b_thresh, "B thresh")
+        g_subplotter.next(combined_binary_r, 's_thresh|gradx|r')
+        g_subplotter.show()
+
+    if 0: # try out LAB
+        g_subplotter.setup(cols=3,rows=4)
+        g_subplotter.next(image, 'orig')
+        g_subplotter.next(s_channel, 's_channel')
+        g_subplotter.next(r_channel, 'r_channel')
+
+        grad1 = abs_sobel_thresh(s_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad2 = abs_sobel_thresh(s_channel, orient='y', sobel_kernel=ksize, thresh=(25,100))
+        mag = mag_thresh(s_channel, sobel_kernel=ksize, thresh=(30, 100))
+        g_subplotter.next(grad1, 'grad1 S')
+        g_subplotter.next(grad2, 'grad2 S')
+        g_subplotter.next(mag, 'mag S')
+
+        grad1 = abs_sobel_thresh(r_channel, orient='x', sobel_kernel=ksize, thresh=(25,100))
+        grad2 = abs_sobel_thresh(r_channel, orient='y', sobel_kernel=ksize, thresh=(25,100))
+        mag = mag_thresh(r_channel, sobel_kernel=ksize, thresh=(30, 100))
+        g_subplotter.next(grad1, 'grad1 R')
+        g_subplotter.next(grad2, 'grad2 R')
+        g_subplotter.next(mag, 'mag R')
+
+        g_subplotter.next(lab_l, 'LAB_L')
+        g_subplotter.next(lab_a, 'LAB_A')
+        g_subplotter.next(lab_b, 'LAB_B')
+        #g_subplotter.next(combined_binary_r, 's_thresh|gradx|r')
+        g_subplotter.show()
+
+    if 0:#g_debug_internal:
         g_subplotter.setup(cols=3,rows=3)
         g_subplotter.next(image, 'orig')
         g_subplotter.next(s_channel, 's_channel')
@@ -1015,7 +1215,7 @@ def create_binary_image(image):
             plt.savefig("writeup-binary.png", bbox_inches='tight')
             g_subplotter.show()
 
-    return combined_binary_r
+    return combined_binary
 
 def process_images(num, filenames=None):
     if args.verbose:
