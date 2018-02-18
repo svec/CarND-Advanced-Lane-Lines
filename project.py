@@ -733,8 +733,8 @@ def find_lane_lines_basic(orig_image, top_down_binary_image, Minv, binary_image)
     # Combine the result with the original image
     # 8. Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     result = cv2.addWeighted(orig_image, 1, newwarp, 0.3, 0)
-    text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
-    #text = "Lane curvature: {:3.2f}m".format(left_curverad)
+    #text = "Lane curvature: {:3.2f}m {:3.2f}m".format(left_curverad, right_curverad)
+    text = "Lane curvature: {:3.2f}m".format(right_curverad)
     cv2.putText(result, text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)
     text = "Car is {:3.2f}m {} from center of lane".format(np.absolute(center_offset_m), center_direction)
     cv2.putText(result, text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, thickness=2)

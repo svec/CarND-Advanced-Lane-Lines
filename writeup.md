@@ -79,11 +79,11 @@ undistorted version of one of the Udacity supplied test images:
 I used the create_binary_image() function to create a thresholded binary image.
 
 I created the thresholded binary image by combining:
-1. The HLS S channel data where values >= 170 (out of 255)
-2. The 'x' gradient (Sobel) applied to the HLS S channel data thresholded by (25,100)
-3. The 'x' gradient (Sobel) applied to the RGB R channel data thresholded by (50,100)
+1. The 'x' gradient (Sobel) with threshold (25,100) applied to the LAB L channel data with threshold (200,255)
+2. The 'x' gradient (Sobel) with threshold (25,100) applied to the LAB B channel data with threshold (143,255)
+3. The 'x' gradient (Sobel) with threshold (50,100) applied to the RGB R channel data with no threshold.
 
-The final image is created in lines 978-986.
+The final image is created in lines 1008-1022.
 
 Here's an example of an original image and its binary thresholded output:
 
@@ -187,3 +187,5 @@ be improved.
 Varying colors in the pavement between lane lines also slightly confuses my
 pipeline: perhaps some pixel masking could help, or some better color filtering
 methods.
+
+After changing to the LAB L + LAB B + RGB R channels (from HLS S + RGB R) the lane finding works much better, but still has a few frames where the pipeline gets slightly confused on the left lane when the pavement vs line contrast is low. The pipeline finds most of the lane correctly; it diverges at its furthest point away from the car.
